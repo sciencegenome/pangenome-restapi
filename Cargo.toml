@@ -1,0 +1,9 @@
+[package]
+name = "rust-pangenome-RESTAPI"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.26", features = ["derive"] }
+rocket = { version = "0.5.1", features = ["json"] }
+serde = "1.0.217"
