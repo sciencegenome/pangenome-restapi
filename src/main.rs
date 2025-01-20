@@ -1,9 +1,13 @@
 extern crate rocket;
+use std::io::Write;
 use rocket::catch;
+use rocket::catchers;
 use rocket::get;
 use rocket::launch;
 use rocket::routes;
 use rocket::{Build, Rocket};
+use serde::json::serde_json;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -18,15 +22,12 @@ use std::io::{BufRead, BufReader};
  reads the personal genome file and then scans the personal genome for
  REST API. I previously used Actix and Leptos for the web in RUST but
  today i build this using the rocket web and it is a RESTAPI for personal
- genomes.
-
- A complete deployable RUST API for any pangenome or personal genome snp.
+ genomes.A complete deployable RUST API for any pangenome or personal genome snp.
 
 */
 
 // structs for holding th personal genome and the pangenome snps for the rest api
-
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct PersonalGenome {
     pub rsid: String,
     pub chromosome: String,
@@ -36,13 +37,13 @@ pub struct PersonalGenome {
     pub humansnp: String,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct PersonalFasta {
     pub header: String,
     pub sequence: String,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct ParseStruct {
     pub rsid: String,
     pub chromosome: String,
@@ -64,7 +65,10 @@ pub struct ParseStruct {
 
 #[launch]
 fn rocket() -> Rocket<Build> {
-    rocket::build().mount("/", routes![personalgenome])
+    rocket::build()
+        .manage(json)
+        .register("/", catchers![snp_absence])
+        .mount("/", routes![personalgenome])
 }
 /*
  * roter function for the personal genome snp profile.
@@ -78,20 +82,20 @@ fn personalgenome(rsidpath: &str) -> String {
     for i in personalgenomeread.lines() {
         let line = i.expect("line not found");
         if line.starts_with("#") {
-          continue
-        } else if !line.starts_with("#"){
-        let personalmutable: Vec<_> = line.split("\t").collect::<Vec<_>>();
-        let genotypesplit: Vec<_> = personalmutable[3].chars().collect::<Vec<_>>();
-        personalgenome.push(PersonalGenome {
-            rsid: personalmutable[0].to_string(),
-            chromosome: personalmutable[1].to_string(),
-            position: personalmutable[2].to_string().parse::<usize>().unwrap(),
-            genotype: personalmutable[3].to_string(),
-            indivisualsnp: genotypesplit[0].to_string(),
-            humansnp: genotypesplit[1].to_string(),
-        });
+            continue;
+        } else if !line.starts_with("#") {
+            let personalmutable: Vec<_> = line.split("\t").collect::<Vec<_>>();
+            let genotypesplit: Vec<_> = personalmutable[3].chars().collect::<Vec<_>>();
+            personalgenome.push(PersonalGenome {
+                rsid: personalmutable[0].to_string(),
+                chromosome: personalmutable[1].to_string(),
+                position: personalmutable[2].to_string().parse::<usize>().unwrap(),
+                genotype: personalmutable[3].to_string(),
+                indivisualsnp: genotypesplit[0].to_string(),
+                humansnp: genotypesplit[1].to_string(),
+            });
+        }
     }
-       }
 
     let mut parse_personal_genome: Vec<ParseStruct> = Vec::new();
     let parse_personal_fasta: Vec<PersonalFasta> = personal_genome().unwrap();
@@ -119,6 +123,12 @@ fn personalgenome(rsidpath: &str) -> String {
                 });
             }
         }
+    }
+
+    let filejson = File::create("personaljson.json").expect("file not found");
+    for i in parse_personal_genome.iter() {
+        let personjsonid = serde_json::to_string(&i).unwrap();
+        writeln!(filejson, "{}", personjsonid);
     }
 
     let mut finalparsestruct: Vec<ParseStruct> = Vec::new();
